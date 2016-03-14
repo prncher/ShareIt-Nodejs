@@ -10,7 +10,7 @@ export class DataAccess {
         if (this.dbConnection == null) {
             MongoClient.connect(DataAccess.shareItUrl, (err, db) => {
                 assert.equal(null, err);
-                console.log("Connected correctly to server.");
+                console.log("Connected correctly to MongoDB server.");
                 this.dbConnection = db;
             });
         }

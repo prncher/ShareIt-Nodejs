@@ -3,6 +3,7 @@ import da = require('./dal');
 
 export class baseController {
     dataAccess: da.DataAccess;
+    socket: any;
 
     sendErrorMessage = (res: express.Response, e?: Error) => {
         if (e) {
@@ -12,5 +13,9 @@ export class baseController {
         else {
             res.sendStatus(400);
         }
+    }
+
+    public setSocket = (socket: any) => {
+        this.socket = socket;
     }
 }
