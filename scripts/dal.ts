@@ -48,7 +48,7 @@ export class DataAccess {
     }
 
 
-    public getStudent(userName: string): any {
+    public getStudent(user : any): any {
         var deferred = Q.defer();
         if (this.dbConnection) {
             var cursor = this.dbConnection.collection('Students').find();
@@ -57,7 +57,9 @@ export class DataAccess {
                 if (err) {
                     deferred.reject(new Error(JSON.stringify(err)));
                 }
-                else if (document !== null && document['userName'] === userName) {
+                else if (document !== null &&
+                    document['userName'] === user.userName &&
+                    document['password'] === user.password) {
                     return deferred.resolve(document);
                 }
                 else if (document === null) {

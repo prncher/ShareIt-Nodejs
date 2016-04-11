@@ -1,6 +1,7 @@
 ﻿import express = require('express');
 import da = require('./dal');
 import base = require('./base');
+import jwt = require('./jwtManage');
 
 var Q = require("q");
 
@@ -34,26 +35,30 @@ export class ResourceController extends base.baseController {
     postResource = (): any => {
         var self = this;
         return (req: express.Request, res: express.Response) => {
-            var da = self.dataAccess;
-            var em = self.sendErrorMessage;
-            var resbody = new Resource(<IResource>req.body);
-            if (resbody != null) {
-                da.getResourcesCount().then((count) => {
-                    resbody.id = count + 1;
-                    da.insertResource(resbody).then((reult) => {
-                        self.socket.emit('resource', { studentId: resbody.studentId, resourceId: resbody.id });
-                        res.sendStatus(201);
+            // Authenticate
+            jwt.JwtManager.Authenticate(req.headers['authorization']).then((decoded) => {
+                var da = self.dataAccess;
+                var em = self.sendErrorMessage;
+                var resbody = new Resource(<IResource>req.body);
+                if (resbody != null) {
+                    da.getResourcesCount().then((count) => {
+                        resbody.id = count + 1;
+                        da.insertResource(resbody).then((reult) => {
+                            self.socket.emit('resource', { studentId: resbody.studentId, resourceId: resbody.id });
+                            res.sendStatus(201);
+                        }).catch((e) => {
+                            return em(res, e);
+                        });
                     }).catch((e) => {
                         return em(res, e);
                     });
-                }).catch((e) => {
-                    return em(res, e);
-                });
-            }
-            else {
-                em(res);
-            }
-
+                }
+                else {
+                    em(res);
+                }
+            }).catch(e => {
+                return res.status(401).json('Failed to authenticate token.');
+            });
         };
     }
 
@@ -62,17 +67,22 @@ export class ResourceController extends base.baseController {
         var da = this.dataAccess;
         var em = this.sendErrorMessage;
         return (req: express.Request, res: express.Response) => {
-            // Get all the resources for this student.
-            var studentId: number = parseInt(req.query.studentId);
-            da.getResources(studentId).then((result) => {
-                if (result) {
-                    res.status(200).json(result);
-                }
-                else {
-                    return em(res, { name: "Error", message: "Resource not found" });
-                }
+            // Authenticate
+            jwt.JwtManager.Authenticate(req.headers['authorization']).then((decoded) => {
+                // Get all the resources for this student.
+                var studentId: number = parseInt(req.query.studentId);
+                da.getResources(studentId).then((result) => {
+                    if (result) {
+                        res.status(200).json(result);
+                    }
+                    else {
+                        return em(res, { name: "Error", message: "Resource not found" });
+                    }
+                }).catch(e => {
+                    return em(res, e);
+                });
             }).catch(e => {
-                return em(res, e);
+                return res.status(401).json('Failed to authenticate token.');
             });
         };
     }

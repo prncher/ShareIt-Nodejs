@@ -1,6 +1,8 @@
 ﻿import express = require('express');
 import da = require('./dal');
 import base = require('./base');
+import jwt = require('./jwtManage');
+
 var Q = require("q");
 
 export interface IBuddy {
@@ -34,42 +36,48 @@ export class BuddyController extends base.baseController {
         var da = this.dataAccess;
         var em = this.sendErrorMessage;
         return (req: express.Request, res: express.Response) => {
-            var buddy = new Buddy(<IBuddy>req.body);
-            if (buddy != null) {
-                if (buddy.buddyId == buddy.studentId) {
-                    return em(res, { name: "Error", message: "A buddy can not be same as user." });
-                }
+            // Authenticate
+            jwt.JwtManager.Authenticate(req.headers['authorization']).then((decoded) => {
 
-                // Get all the buddies for this student.
-                da.getBuddies(buddy.studentId).then((result) => {
-                    var buddyExist = false;
-                    result.forEach((bud, index) => {
-                        if (bud.buddyId === buddy.buddyId) {
-                            buddyExist = true;
-                            return em(res, { name: "Error", message: "This buddy is added before." });
-                        }
-                    });
+                var buddy = new Buddy(<IBuddy>req.body);
+                if (buddy != null) {
+                    if (buddy.buddyId == buddy.studentId) {
+                        return em(res, { name: "Error", message: "A buddy can not be same as user." });
+                    }
 
-                    if (!buddyExist) {
-                        da.getBuddiesCount().then((count) => {
-                            buddy.id = count + 1;
-                            da.insertBuddy(buddy).then((reult) => {
-                                res.sendStatus(201);
+                    // Get all the buddies for this student.
+                    da.getBuddies(buddy.studentId).then((result) => {
+                        var buddyExist = false;
+                        result.forEach((bud, index) => {
+                            if (bud.buddyId === buddy.buddyId) {
+                                buddyExist = true;
+                                return em(res, { name: "Error", message: "This buddy is added before." });
+                            }
+                        });
+
+                        if (!buddyExist) {
+                            da.getBuddiesCount().then((count) => {
+                                buddy.id = count + 1;
+                                da.insertBuddy(buddy).then((reult) => {
+                                    res.sendStatus(201);
+                                }).catch((e) => {
+                                    return em(res, e);
+                                });
                             }).catch((e) => {
                                 return em(res, e);
                             });
-                        }).catch((e) => {
-                            return em(res, e);
-                        });
-                    }
+                        }
 
-                }).catch((e) => {
-                    return em(res, e);
-                });
-            }
-            else {
-                em(res);
-            }
+                    }).catch((e) => {
+                        return em(res, e);
+                    });
+                }
+                else {
+                    em(res);
+                }
+            }).catch(e => {
+                return res.status(401).json('Failed to authenticate token.');
+            });
         }
     }
 
@@ -78,17 +86,22 @@ export class BuddyController extends base.baseController {
         var da = this.dataAccess;
         var em = this.sendErrorMessage;
         return (req: express.Request, res: express.Response) => {
-            // Get all the buddies for this student.
-            var studentId: number = parseInt(req.query.studentId);
-            da.getBuddiesAsStudent(studentId).then((result) => {
-                if (result) {
-                    res.status(200).json(result);
-                }
-                else {
-                    return em(res, { name: "Error", message: "Buddies not found" });
-                }
+            // Authenticate
+            jwt.JwtManager.Authenticate(req.headers['authorization']).then((decoded) => {
+                // Get all the buddies for this student.
+                var studentId: number = parseInt(req.query.studentId);
+                da.getBuddiesAsStudent(studentId).then((result) => {
+                    if (result) {
+                        res.status(200).json(result);
+                    }
+                    else {
+                        return em(res, { name: "Error", message: "Buddies not found" });
+                    }
+                }).catch(e => {
+                    return em(res, e);
+                });
             }).catch(e => {
-                return em(res, e);
+                    return res.status(401).json('Failed to authenticate token.');
             });
         }
     }

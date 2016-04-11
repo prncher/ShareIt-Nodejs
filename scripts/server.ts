@@ -3,15 +3,23 @@ var http = require('http');
 import express = require('express');
 var fs = require('fs');
 var bodyParser = require('body-parser');
+var expressJWT = require('express-jwt');
 
 import st = require('./student');
 import bd = require('./buddy');
 import da = require('./dal');
 import rs = require('./resource');
 import fl = require('./file');
+import jwt = require('./jwtManage');
+
+
+// Add Error Handler
 
 var app = express();
 app.use(express.static("../ShareIt-Client"));
+app.use(expressJWT({ secret: jwt.JwtManager.publicKey }).unless({
+    path: ['/', '/api/Students', '/api/Files']
+}));
 var server = http.Server(app);
 var io = require('socket.io')(server);
 var port = process.env.port || 8080;

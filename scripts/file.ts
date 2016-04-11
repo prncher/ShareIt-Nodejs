@@ -1,6 +1,7 @@
 ﻿import express = require('express');
 import da = require('./dal');
 import base = require('./base');
+import jwt = require('./jwtManage');
 
 var Q = require("q");
 var multer = require('multer');
@@ -44,28 +45,33 @@ export class FileController extends base.baseController {
     postFile = (): any => {
         var self = this;
         return (req: any, res: express.Response) => {
-            console.log(req.file.filename);
-            console.log(req.file.path);
-            console.log(req.file.size);
-            var tokens = req.file.originalname.split('<');
-            var folder = this.fileFolder + tokens[0];
-            console.log('Student ID : ' + tokens[0] + ' file : ' + tokens[1]);
-            fs.exists(folder, (exists: boolean) => {
-                if (exists) {
-                    //(res: express.Response, folder : string, fileName : string, studentId : string, file : string)
-                    this.renameFile(res, req.file.filename, tokens[0], tokens[1], self.sendErrorMessage, self.socket);
-                }
-                else {
-                    fs.mkdir(folder, (err) => {
-                        if (err) {
-                            console.log(err);
-                            res.status(err.status).end();
-                        }
-                        else {
-                            this.renameFile(res, req.file.filename, tokens[0], tokens[1], self.sendErrorMessage, self.socket);
-                        }
-                    });
-                }
+            // Authenticate
+            jwt.JwtManager.Authenticate(req.headers['authorization']).then((decoded) => {
+                console.log(req.file.filename);
+                console.log(req.file.path);
+                console.log(req.file.size);
+                var tokens = req.file.originalname.split('<');
+                var folder = this.fileFolder + tokens[0];
+                console.log('Student ID : ' + tokens[0] + ' file : ' + tokens[1]);
+                fs.exists(folder, (exists: boolean) => {
+                    if (exists) {
+                        //(res: express.Response, folder : string, fileName : string, studentId : string, file : string)
+                        this.renameFile(res, req.file.filename, tokens[0], tokens[1], self.sendErrorMessage, self.socket);
+                    }
+                    else {
+                        fs.mkdir(folder, (err) => {
+                            if (err) {
+                                console.log(err);
+                                res.status(err.status).end();
+                            }
+                            else {
+                                this.renameFile(res, req.file.filename, tokens[0], tokens[1], self.sendErrorMessage, self.socket);
+                            }
+                        });
+                    }
+                });
+            }).catch(e => {
+                return res.status(401).json('Failed to authenticate token.');
             });
         };
     }
@@ -73,49 +79,58 @@ export class FileController extends base.baseController {
     // get all the file infos for this student.
     getFiles = (): any => {
         var em = this.sendErrorMessage;
+        var self = this;
         return (req: express.Request, res: express.Response) => {
-            var studentId: number = parseInt(req.query.studentId);
-            var fileName: string = req.query.fileName;
-            if (studentId) {
-                var fullPath: string = this.fileFolder + studentId + '/';
+            // Authenticate
+            var bearerToken;
+            if (req.query.token !== undefined) { bearerToken = 'Bearer ' + req.query.token }
+            else { bearerToken = req.headers['authorization'] }
 
-                if (fileName) {
-                    this.sendFileWithMime(res, fullPath, fileName, em);
-                }
-                else {
-                    fs.exists(fullPath, (exists: boolean) => {
-                        if (exists) {
-                            fs.readdir(fullPath, (err: NodeJS.ErrnoException, files: string[]) => {
-                                if (err) {
-                                    console.log(err);
-                                    return em(res, err);
-                                }
-                                else {
-                                    var fds: Array<FileData> = new Array<FileData>();
-                                    files.forEach((value: string, index: number, array: string[]) => {
-                                        fds.push({
-                                            studentId: studentId.toString(),
-                                            name: value,
-                                            link: '/api/Files?studentId=' + studentId + '&fileName=' + value
+            jwt.JwtManager.Authenticate(bearerToken).then((decoded) => {
+                var studentId: number = parseInt(req.query.studentId);
+                var fileName: string = req.query.fileName;
+                if (studentId) {
+                    var fullPath: string = this.fileFolder + studentId + '/';
+
+                    if (fileName) {
+                        self.sendFileWithMime(res, fullPath, fileName, em);
+                    }
+                    else {
+                        fs.exists(fullPath, (exists: boolean) => {
+                            if (exists) {
+                                fs.readdir(fullPath, (err: NodeJS.ErrnoException, files: string[]) => {
+                                    if (err) {
+                                        console.log(err);
+                                        return em(res, err);
+                                    }
+                                    else {
+                                        var fds: Array<FileData> = new Array<FileData>();
+                                        files.forEach((value: string, index: number, array: string[]) => {
+                                            fds.push({
+                                                studentId: studentId.toString(),
+                                                name: value,
+                                                link: '/api/Files?studentId=' + studentId + '&fileName=' + value + '&token=' + jwt.JwtManager.GetToken()
+                                            });
                                         });
-                                    });
 
-                                    res.status(200).json(fds)
-                                }
+                                        res.status(200).json(fds)
+                                    }
 
-                            });
-                        } else {
-                            fs.mkdir(fullPath, (err) => {
-                                if (err) {
-                                    console.log(err);
-                                    res.status(err.status).end();
-                                }
-                            });
-                        }
-                    });
+                                });
+                            } else {
+                                fs.mkdir(fullPath, (err) => {
+                                    if (err) {
+                                        console.log(err);
+                                        res.status(404).send(err);
+                                    }
+                                });
+                            }
+                        });
+                    }
                 }
-            }
-
+            }).catch(e => {
+                return res.status(401).json('Failed to authenticate token.');
+            });
         };
     }
 
